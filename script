@@ -1,0 +1,171 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © rolgui
+// @version=4
+// 'All in One' indicator for TradingLatino's strategy combined with John F. Carter's strategy (turned off by default).
+
+study(title="Squeeze M. + ADX + TTM (TradingLatino & John F. Carter) by [Rolgui]", shorttitle="SQZ+ADX+TTM [R]", overlay=false)
+
+// 1) Squeeze Momentum Oscillator @ LazyBear
+
+show_SQZ = input(true, title="Show Squeeze Oscillator")
+
+allLengthValue = input(20, title="BB Length", type=input.integer)
+BB_mult = input(2.0,title="BB MultFactor")
+lengthKC=input(20, title="KC Length")
+multKC = input(1.5, title="KC MultFactor")
+linearMomentum = input(20, title="Linear Momentum", type=input.integer)
+
+useTrueRangeM = true
+
+// Calculate BB
+source = close
+BB_basis = sma(source, allLengthValue)
+dev = BB_mult * stdev(source, allLengthValue)
+upperBB = BB_basis + dev
+lowerBB = BB_basis - dev
+
+// Calculate KC
+KC_basis = sma(source, lengthKC)
+range = useTrueRangeM ? tr : (high - low)
+devKC = sma(range, allLengthValue)
+upperKC = KC_basis + devKC * multKC
+lowerKC = KC_basis - devKC * multKC
+
+sqzOn  = (lowerBB > lowerKC) and (upperBB < upperKC)
+sqzOff = (lowerBB < lowerKC) and (upperBB > upperKC)
+noSqz  = (sqzOn == false) and (sqzOff == false)
+
+val = linreg(source - avg(avg(highest(high, linearMomentum), lowest(low, linearMomentum)),sma(close,linearMomentum)), linearMomentum,0)
+
+bcolor = iff( val > 0, iff( val > nz(val[1]), color.rgb(46, 245, 39, 0), color.rgb(16, 120, 13, 0)), iff( val < nz(val[1]), color.rgb(217, 6, 6, 0), color.rgb(98, 0, 0, 0)))
+
+sz  = linreg(source - avg(avg(highest(high, allLengthValue), lowest(low, allLengthValue)), sma(close, allLengthValue)), allLengthValue, 0)
+
+//****************************************************************************************************************************************************************************************//
+
+// 2) Average Directional Indez @ matetaronna
+
+int scale = 75
+useTrueRange = true
+show_ADX = input(true, title="Show Average Directional Index")
+scaleADX = 2.0
+float far = 0
+int adxlen = input(14, title="ADX Longitud", minval=1, step=1)
+int dilen = 14
+keyLevel = input(23, title="Key Level", minval=1, step=1)
+
+// ADX Calculations
+dirmov(len) =>
+	up = change(high)
+	down = -change(low)
+	truerange = rma(tr, len)
+	plus = fixnan(100 * rma(up > down and up > 0 ? up : 0, len) / truerange)
+	minus = fixnan(100 * rma(down > up and down > 0 ? down : 0, len) / truerange)
+	[plus, minus]
+
+adx(dilen, adxlen) => 
+	[plus, minus] = dirmov(dilen)
+	sum = plus + minus
+	adx = 100 * rma(abs(plus - minus) / (sum == 0 ? 1 : sum), adxlen)
+	[adx, plus, minus]
+
+// ADX Output values
+[adxValue, diplus, diminus] = adx(dilen, adxlen)
+
+// Setting indicator's scale to match the others.
+biggest(series) =>
+    max = 0.0
+    max := nz(max[1], series)
+    if series > max
+        max := series
+    max
+
+ni = biggest(sz)
+far1=far* ni/scale
+adx_scale = (adxValue - keyLevel) * ni/scale
+adx_scale2 = (adxValue - keyLevel+far) * ni/scale
+
+//****************************************************************************************************************************************************************************************//
+
+// 3) Trade The Market Waves A, B and C @ jombie
+
+showWaves = input(false, title = "Show TTM Waves", type=input.bool)
+
+usewa = showWaves
+waveALength = input(title="Wave A Length", type=input.integer, defval=55, minval=0)
+
+usewb = showWaves
+waveBLength = input(title="Wave B Length", type=input.integer, defval=144, minval=0)
+
+usewc = showWaves
+waveCLength = input(title="Wave C Length", type=input.integer, defval=233, minval=0)
+
+// Wave A
+fastMA1 = usewa ? ema(close, 8) : na
+slowMA1 = usewa ? ema(close, waveALength) : na
+macd1 =  usewa ? fastMA1 - slowMA1 : na
+signal1 =  usewa ? ema(macd1, waveALength) : na
+histA =  usewa ? macd1 - signal1 : na
+
+// Wave B
+fastMA3 = usewb ? ema(close, 8) : na
+slowMA3 = usewb ? ema(close, waveBLength) : na
+macd3 = usewb ? fastMA3 - slowMA3 : na
+signal3 = usewb ? ema(macd3, waveALength) : na
+histB = usewb ? macd3 - signal3 : na
+
+// Wave C
+fastMA5 = usewc ? ema(close, 8) : na
+slowMA5 = usewc ? ema(close, waveCLength) : na
+macd5 = usewc ? fastMA5 - slowMA5 : na
+signal5 = usewc ? ema(macd5, waveCLength) : na
+histC = usewc ? macd5 - signal5 : na
+
+//****************************************************************************************************************************************************************************************//
+
+// 4) Squeeze Momentum Compression @ joren
+
+// Keltner Levels
+KC_mult_high = 1.0
+KC_mult_mid = 1.5
+KC_mult_low = 2.0
+
+KC_upper_high = KC_basis + devKC * KC_mult_high
+KC_lower_high = KC_basis - devKC * KC_mult_high
+KC_upper_mid = KC_basis + devKC * KC_mult_mid
+KC_lower_mid = KC_basis - devKC * KC_mult_mid
+KC_upper_low = KC_basis + devKC * KC_mult_low
+KC_lower_low = KC_basis - devKC * KC_mult_low
+
+// Squeeze Momentum Conditions
+NoSqz = lowerBB < KC_lower_low or upperBB > KC_upper_low // No Squeeze.
+LowSqz = lowerBB >= KC_lower_low or upperBB <= KC_upper_low // Low Compression.
+MidSqz = lowerBB >= KC_lower_mid or upperBB <= KC_upper_mid // Mid Compression. -> Momentum
+HighSqz = lowerBB >= KC_lower_high or upperBB <= KC_upper_high // High Compression. -> Momentum
+
+// Squeeze Momentum colors
+sq_color = HighSqz ? color.rgb(136, 0, 255, 0) : MidSqz ? color.rgb(136, 0, 255, 0) : LowSqz ? color.new(color.white, 0) : color.new(color.white, 0)
+
+// Show Squeeze Momentum
+showTTMSQZ = input(false, type=input.bool, title="Show Squeeze Momentum")
+
+//****************************************************************************************************************************************************************************************//
+
+// Draw plots section by visibility order.
+
+// TTM Waves
+plot(histA, color=color.new(color.teal, 80), style=plot.style_area, title="Wave A", linewidth=1)
+plot(histB, color=color.new(color.orange, 90), style=plot.style_area, title="Wave B", linewidth=1)
+plot(histC, color=color.new(color.yellow, 90), style=plot.style_area, title="Wave C", linewidth=1)
+
+// Squeeze Oscillator
+plot(show_SQZ ? val : na, title="Squeeze Oscillator", color=bcolor, style=plot.style_columns, linewidth=4)
+
+// Key Level
+plot(show_ADX ? far1 * scaleADX : na, color=color.white, title="Key Level", linewidth = 1)
+
+// Squeeze Momentum
+plot(showTTMSQZ? 0 : na, title='Squeeze Momentum', color=sq_color, style=plot.style_line, linewidth=2)
+
+// ADX
+p1 = plot(show_ADX ? adx_scale2 * scaleADX : show_ADX ? adx_scale * scaleADX : na, color = color.white, title = "ADX", linewidth = 2)
