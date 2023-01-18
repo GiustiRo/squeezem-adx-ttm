@@ -7,6 +7,7 @@ https://es.tradingview.com/u/rolgui/#published-scripts
 
 The content of 'script' file must be placed on Trading View's Pine Script editor to be used.
 
+![image](https://user-images.githubusercontent.com/39607414/213170812-72b8f6c4-c5df-48a4-9fda-03aabc3d7883.png)
 
 ### About this indicator:
 This indicator aims to combine two good performing strategies, which can be used separately or together, mainly for investment positions, although it can also be used for intraday trading.
